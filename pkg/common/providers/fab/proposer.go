@@ -74,10 +74,32 @@ type ChaincodeInvokeRequest struct {
 	IsInit       bool
 }
 
+//RequestType shows which PAC transaction to create
+type RequestType int32
+
+const (
+	//PrepareTxRequest is set if client wants generate & submit PrepareTx
+	PrepareTxRequest RequestType = 1
+	//DecideTxRequest is set if client wants generate & submit DecideTx
+	DecideTxRequest RequestType = 2
+	//AbortTxRequest is set if client wants generate & submit AbortTx
+	AbortTxRequest RequestType = 3
+)
+
+//ClientData contains additional transaction data for private atomic commmit
+type ClientData struct {
+	//RequestedTransaction shows which PAC transaction to create
+	RequestedTransaction RequestType
+	//ValidationData contains marshalled specific transaction data that is
+	//expected from the client due to RequestedTransaction type is set
+	ValidationData []byte
+}
+
 // TransactionProposal contains a marashalled transaction proposal.
 type TransactionProposal struct {
 	TxnID TransactionID
 	*pb.Proposal
+	PACClientData ClientData
 }
 
 // ProcessProposalRequest requests simulation of a proposed transaction from transaction processors.

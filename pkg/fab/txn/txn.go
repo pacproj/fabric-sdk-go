@@ -86,10 +86,38 @@ func New(request fab.TransactionRequest) (*fab.Transaction, error) {
 	taas := make([]*pb.TransactionAction, 1)
 	taas[0] = taa
 
-	return &fab.Transaction{
-		Transaction: &pb.Transaction{Actions: taas},
-		Proposal:    proposal,
-	}, nil
+	switch request.Proposal.PACClientData.RequestedTransaction {
+	case fab.PrepareTxRequest, fab.DecideTxRequest, fab.AbortTxRequest:
+		//TODO: доделать упаковку в PACTxEnvelope данных для валиадции
+		logger.Debugf("Wrapping to PACTxEnvelope struct started")
+		marshalledTransaction := protoutil.MarshalOrPanic(&pb.Transaction{Actions: taas})
+		chdr, err := protoutil.UnmarshalChannelHeader(hdr.ChannelHeader)
+		if err != nil {
+			return nil, err
+		}
+		//Should I pass a pointer to the MarshalOrPanic()?
+		marshalledPACEnvelope := protoutil.MarshalOrPanic(
+			&common.PACTxEnvelope{
+				TxType:  chdr.Type,
+				Payload: marshalledTransaction,
+			})
+		logger.Debugf("Wrapping to PACTxEnvelope struct successfully ended")
+		return &fab.Transaction{
+			Transaction: marshalledPACEnvelope, //потом будет proto.Marshal(pb.Transaction)
+			Proposal:    proposal,
+		}, nil
+
+	default:
+		// serialize the tx
+		txBytes, err := protoutil.GetBytesTransaction(&pb.Transaction{Actions: taas})
+		if err != nil {
+			return nil, err
+		}
+		return &fab.Transaction{
+			Transaction: txBytes,
+			Proposal:    proposal,
+		}, nil
+	}
 }
 
 func validateProposalResponses(responses []*fab.TransactionProposalResponse) error {
@@ -118,15 +146,10 @@ func Send(reqCtx reqContext.Context, tx *fab.Transaction, orderers []fab.Orderer
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal proposal header failed")
 	}
-	// serialize the tx
-	txBytes, err := protoutil.GetBytesTransaction(tx.Transaction)
-	if err != nil {
-		return nil, err
-	}
 
 	// create the payload
-	payload := common.Payload{Header: hdr, Data: txBytes}
-
+	payload := common.Payload{Header: hdr, Data: tx.Transaction}
+	logger.Debugf("Paylad created successful before BroadcastPayload()")
 	transactionResponse, err := BroadcastPayload(reqCtx, &payload, orderers)
 	if err != nil {
 		return nil, err
