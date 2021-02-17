@@ -6,10 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 package fab
 
-import (
-	pb "github.com/hyperledger/fabric-protos-go/peer"
-)
-
 // TransactionRequest holds endorsed Transaction Proposals.
 type TransactionRequest struct {
 	Proposal          *TransactionProposal
@@ -27,7 +23,7 @@ type Sender interface {
 // The Transaction object created from an endorsed proposal.
 type Transaction struct {
 	Proposal    *TransactionProposal
-	Transaction *pb.Transaction
+	Transaction []byte
 }
 
 // TransactionResponse contains information returned by the orderer.
