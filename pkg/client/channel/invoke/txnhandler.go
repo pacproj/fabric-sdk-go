@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/status"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/options"
+	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -175,6 +176,42 @@ func (c *CommitTxHandler) Handle(requestContext *RequestContext, clientContext *
 		return
 	}
 	defer clientContext.EventService.Unregister(reg)
+
+	requestContext.Response.Proposal.PACClientData = requestContext.Request.PACClientData
+
+	if requestContext.Request.PACClientData.RequestedTransaction == fab.PrepareTxRequest ||
+		requestContext.Request.PACClientData.RequestedTransaction == fab.DecideTxRequest ||
+		requestContext.Request.PACClientData.RequestedTransaction == fab.AbortTxRequest {
+		//Replacement TxType from TRANSACTION_ENDORSER to the specific client defined PAC_TRANSACTION
+		hdr, err := protoutil.UnmarshalHeader(requestContext.Response.Proposal.Header)
+		if err != nil {
+			requestContext.Error = errors.Wrap(err, "unmarshal proposal header failed")
+			return
+		}
+		chdr, err := protoutil.UnmarshalChannelHeader(hdr.ChannelHeader)
+		if err != nil {
+			requestContext.Error = errors.Wrap(err, "unmarshal channel header failed")
+			return
+		}
+		switch requestContext.Request.PACClientData.RequestedTransaction {
+		case fab.PrepareTxRequest:
+			chdr.Type = int32(common.HeaderType_PAC_PREPARE_TRANSACTION)
+		case fab.DecideTxRequest:
+			chdr.Type = int32(common.HeaderType_PAC_DECIDE_TRANSACTION)
+		case fab.AbortTxRequest:
+			chdr.Type = int32(common.HeaderType_PAC_ABORT_TRANSACTION)
+		default:
+			requestContext.Error = errors.Wrap("Unexpected error during txType replacemt")
+			return
+		}
+		hdr.ChannelHeader = protoutil.MarshalOrPanic(chdr)
+		requestContext.Response.Proposal.Header, err = protoutil.Marshal(hdr)
+		if err != nil {
+			requestContext.Error = errors.Wrap(err, "marshal changed header failed")
+			return
+		}
+
+	}
 
 	_, err = createAndSendTransaction(clientContext.Transactor, requestContext.Response.Proposal, requestContext.Response.Responses)
 	if err != nil {
