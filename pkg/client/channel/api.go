@@ -51,6 +51,7 @@ type Request struct {
 	// chain along with any collections, otherwise it may be omitted.
 	InvocationChain []*fab.ChaincodeCall
 	IsInit          bool
+	PACClientData   fab.ClientData
 }
 
 //Response contains response parameters for query and execute an invocation transaction
